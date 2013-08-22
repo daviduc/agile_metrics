@@ -225,18 +225,23 @@ plot_graphs<-function(x,type=1)
     predicts.loess<-predict(lo)
     
     burn.rate.data<-as.data.frame(cbind(actual.hours.by.status.period,status.period.end.date,sprint.start.date,value,predicts.loess))
-
+    burn.rate.data<-burn.rate.data[order(burn.rate.data[,3]),] # order on sprint.start.date
     burn.rate.data<-burn.rate.data[-which(duplicated(burn.rate.data$status.period.end.date,fromLast=TRUE)),]
     
     weekend.days<-(diff(burn.rate.data$status.period.end.date)%/%7)*2  # doing integer division to calc 2 weekend days every 7 days
     weekend.days<-append(((burn.rate.data$status.period.end.date[1]-burn.rate.data$sprint.start.date[1])%/%7)*2,weekend.days) # add in first weekend count
-    off.fridays<-append(0,diff(burn.rate.data$status.period.end.date)%/%14)  # doing integer division to calc off fridays every 14 days
+    
+    # doing integer division to calc off fridays every 14 days
+    total.off.fridays<-(burn.rate.data[,3][nrow(burn.rate.data)]-burn.rate.data[,3][1])%/%14
+    # divide evenly among elements of off.fridays vector
+    off.fridays<-c(rep(19/length(weekend.days),length(weekend.days)))
     nonwork.days<-weekend.days+off.fridays
     
-    daily.burn.rate<-append(0,diff(burn.rate.data$actual.hours.by.status.period)/diff(burn.rate.data$status.period.end.date))
-    moving.daily.burn.rate<-append(0,burn.rate.data$actual.hours.by.status.period/
-                                    (burn.rate.data$status.period.end.date-burn.rate.data$sprint.start.date[1]-nonwork.days))
-    print(moving.daily.burn.rate)
+    daily.burn.rate<-append(0,diff(burn.rate.data$actual.hours.by.status.period)) / 
+      (append(0,diff(burn.rate.data$status.period.end.date))-nonwork.days)
+    avg.daily.burn.rate<-burn.rate.data$actual.hours.by.status.period/
+      (burn.rate.data$status.period.end.date-burn.rate.data$sprint.start.date[1]-cumsum(nonwork.days))
+    #print(avg.daily.burn.rate)
     
     date.vector<-as.character(as.Date(burn.rate.data$status.period.end.date,origin="1970-01-01"))
     
@@ -253,13 +258,128 @@ plot_graphs<-function(x,type=1)
     #lines(burn.rate.data$predicts.loess,col='red',lwd=2)
     par(new=TRUE)
     par(mgp=c(1,0.1,0)) #changing start line of y-axis tick labels from 0.5 to 0.1
-    plot(moving.daily.burn.rate, pch=19, col='blue',type="l",xaxt="n",yaxt="n",xlab="",ylab="", lwd=2,col.lab='blue')
+    plot(avg.daily.burn.rate, pch=19, col='blue',type="l",xaxt="n",yaxt="n",xlab="",ylab="", lwd=2,col.lab='blue')
     axis(4,line=0,cex.axis=.6,tck=-.01, col='blue',col.lab='blue') #vert-axis, right side
-    mtext("moving daily burn rate (hrs/day)",side=4,line=1.1,cex=.8,las=0,col='blue')
-    legend("topleft",col=c("black","blue"),lty=1,legend=c("actuals","mov. avg. daily rate"),lwd=2)
+    mtext("average daily burn rate (hrs/day) up to status period",side=4,line=1.1,cex=.8,las=0,col='blue')
+    legend("topleft",col=c("black","blue"),lty=1,legend=c("cumulative","avg. daily rate up to status pd."),lwd=2)
+
+    #par(new=TRUE)
+    #plot(daily.burn.rate, pch=19, col='red',type="l",xaxt="n",yaxt="n",xlab="",ylab="", lwd=2,col.lab='red')
     #lines(daily.burn.rate,col='blue',lwd=2)
     burn.rate.data
   }
+  # x needs to be the 1st list element output of read_code_metrics which is 5 column array, each column being a vector
+  # first vector is the file list
+  # second vector is the total sloc by order of the file list
+  # third vector is the test complexity( i.e. cyclomatic complexity==number of test cases) for covering all code paths
+  else if(type==9)
+  {
+    vect_fnames<-x[,1]
+    vect_sloc<-x[,2]
+    vect_test<-x[,3]
+    
+    par(mar=c(4,2,2,2))   
+    
+    plot(vect_sloc, type="l", lwd=2,
+         ,pch=19,ylab="",xlab="",xaxt="n",yaxt="n",cex.lab=.8) # use main="Example Title" for plot title
+    axis(1,line=0,at=c(1:length(vect_sloc)), cex.axis=.6, tck=-.01, labels=vect_fnames,las=2) #hort-axis
+    
+    par(mgp=c(1,0.5,0)) #changing start line of y-axis tick labels from 0 to 0.5
+    axis(2,line=0,at=vect_sloc, cex.axis=.6, tck=-.01) #vert-axis left side
+    mtext("total SLOC", side=2,line=1.1,cex=.8,las=0)   #vert-axis
+    text(x=length(vect_sloc),y=as.numeric(vect_sloc[length(vect_sloc)])-300,labels=as.character(vect_sloc[length(vect_sloc)]))
+    par(new=TRUE)
+    par(mgp=c(1,0.1,0)) #changing start line of y-axis tick labels from 0.5 to 0.1
+    plot(vect_test, pch=19, col='blue',type="l",xaxt="n",yaxt="n",xlab="",ylab="", lwd=2,col.lab='blue')
+    axis(4,line=0,cex.axis=.6,tck=-.01, col='blue',col.lab='blue',at=vect_test) #vert-axis, right side
+    mtext("test complexity (req. # of test cases)",side=4,line=1.1,cex=.8,las=0,col='blue',col.lab='blue')
+    legend("topleft",col=c("black","blue"),lty=1,legend=c("sloc","complexity"),lwd=2)
+    #text(x=2,y=1500,labels="test",adj=1, col="red")    
+  }
+  # x needs to be the 2nd list element output of read_code_metrics which is 2 dim column array, 
+  # each column being a namespace and each row being a build
+  else if(type==10)
+  {
+    
+    arr.stotals<-x
+    vect_fnames<-attributes(arr.stotals)$dimnames[[1]]
+    vect_nnames<-attributes(arr.stotals)$dimnames[[2]]
+    nNamespaces<-dim(arr.stotals)[2]
+    
+    par(mfrow=c(3,3)) # assuming 9 namespaces, update when this changes
+    
+    for(iter in c(1:nNamespaces))
+    {
+      par(mar=c(4,2,2,2))   
+      plot(arr.stotals[,iter], type="l", lwd=2,
+           ,pch=19,ylab="",xlab="",xaxt="n",yaxt="n",cex.lab=.8, main=paste(vect_nnames[iter],"SLOC",sep=" ")) # use main="Example Title" for plot title
+      axis(1,line=0,at=c(1:length(arr.stotals[,iter])), cex.axis=.6, tck=-.01, labels=vect_fnames,las=2) #hort-axis
+      par(mgp=c(1,0.5,0)) #changing start line of y-axis tick labels from 0 to 0.5
+      axis(2,line=0, cex.axis=.6, tck=-.01) #vert-axis left side    
+      
+    }
+    
+    
+  }
+  # x needs to be a list of all the status periods, i.e. lapply(list.files(".\\","ocas"),load_agile_sprints_into_frames)
+  else if(type==11)
+  {
+    #iterate over all the status periods
+    #dev.off()
+    burn.rate.data<-data.frame()
+    sprints<-x
+    actual.hours.by.status.period<-sapply(sprints,function(a) { sum(a$Spent.Hours)})
+    status.period.end.date<-sapply(sprints, function(a) { 
+      if     (process_sprint_week(a$Sourcefile[1])<2)   as.Date(a$Sprint.Start.Date[1]) +7
+      else if(process_sprint_week(a$Sourcefile[1])<3)   as.Date(a$Sprint.Start.Date[1]) +14
+      else                                              as.Date(a$Sprint.Start.Date[1])+21 } ) 
+    sprint.start.date<-sapply(sprints, function(a) { as.Date(a$Sprint.Start.Date[1])})
+    value<-sapply(sprints,function(a) { process_sprint_week(a$Sourcefile[1])})
+    lo<-loess(actual.hours.by.status.period~status.period.end.date) #localized and weighted regressions
+    predicts.loess<-predict(lo)
+    
+    burn.rate.data<-as.data.frame(cbind(actual.hours.by.status.period,status.period.end.date,sprint.start.date,value,predicts.loess))
+    burn.rate.data<-burn.rate.data[order(burn.rate.data[,3]),] # order on sprint.start.date
+    burn.rate.data<-burn.rate.data[-which(duplicated(burn.rate.data$status.period.end.date,fromLast=TRUE)),]
+    
+    weekend.days<-(diff(burn.rate.data$status.period.end.date)%/%7)*2  # doing integer division to calc 2 weekend days every 7 days
+    weekend.days<-append(((burn.rate.data$status.period.end.date[1]-burn.rate.data$sprint.start.date[1])%/%7)*2,weekend.days) # add in first weekend count
+    
+    # doing integer division to calc off fridays every 14 days
+    total.off.fridays<-(burn.rate.data[,3][nrow(burn.rate.data)]-burn.rate.data[,3][1])%/%14
+    # divide evenly among elements of off.fridays vector
+    off.fridays<-c(rep(19/length(weekend.days),length(weekend.days)))
+    nonwork.days<-weekend.days+off.fridays
+    
+    daily.burn.rate<-append(0,diff(burn.rate.data$actual.hours.by.status.period)) / 
+      (append(0,diff(burn.rate.data$status.period.end.date))-nonwork.days)
+    avg.daily.burn.rate<-burn.rate.data$actual.hours.by.status.period/
+      (burn.rate.data$status.period.end.date-burn.rate.data$sprint.start.date[1]-cumsum(nonwork.days))
+    print(avg.daily.burn.rate)
+    
+    date.vector<-as.character(as.Date(burn.rate.data$status.period.end.date,origin="1970-01-01"))
+    
+    par(mar=c(4,2,2,2))   
+    
+    plot(avg.daily.burn.rate, type="l", lwd=2,
+         ,pch=19,ylab="",xlab="",xaxt="n",yaxt="n",cex.lab=.8,ylim=c(0,30)) # use main="Example Title" for plot title
+    axis(1,line=0,at=c(1:length(burn.rate.data$status.period.end.date)), cex.axis=.6, tck=-.01, labels=date.vector,las=2) #hort-axis
+    
+    par(mgp=c(1,0.5,0)) #changing start line of y-axis tick labels from 0 to 0.5
+    axis(2,line=0,at=c(0:30), cex.axis=.6, tck=-.01) #vert-axis left side
+    #mtext("date",side=1,line=1,cex=.8,las=0) #hort-axis
+    mtext("burn rate (hrs/day)", side=2,line=1.1,cex=.8,las=0)   #vert-axis
+    #lines(burn.rate.data$predicts.loess,col='red',lwd=2)
+    
+    par(mgp=c(1,0.1,0)) #changing start line of y-axis tick labels from 0.5 to 0.1
+    lines(daily.burn.rate,pch=19, col='blue',type="l",xaxt="n",yaxt="n",xlab="",ylab="", lwd=2,col.lab='blue')
+    legend("topleft",col=c("black","blue"),lty=1,legend=c("avg. daily rate up to status pd.", "daily rate per status pd."),lwd=2)
+    
+    #par(new=TRUE)
+    #plot(daily.burn.rate, pch=19, col='red',type="l",xaxt="n",yaxt="n",xlab="",ylab="", lwd=2,col.lab='red')
+    #lines(daily.burn.rate,col='blue',lwd=2)
+    burn.rate.data
+  }  
   #dev.off()
   
 }
